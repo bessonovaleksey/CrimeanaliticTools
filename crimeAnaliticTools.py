@@ -63,7 +63,7 @@ import warnings
 from sklearn.exceptions import ConvergenceWarning
 import matplotlib.pyplot as plt
 from clusterTools import classAgreement
-
+from functools import reduce
 
 def ci_auc(y_true, y_pred, conf_level=0.95, n_bootstraps=1000, method='delong', sample_weight=None):
     """
