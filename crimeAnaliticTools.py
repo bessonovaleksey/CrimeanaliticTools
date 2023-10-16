@@ -19,9 +19,13 @@ inter_input_weight(model, features_names=None)
 Irvin_Test(data,q=0.05,method=1)
 lekprofile_nn(model, data, xsel=None, steps=100, group_vals=np.arange(0,1.1,0.2), val_out=False,
               group_show=False, figsize=(10, 7), width=0.8, plotstyle='_mpl-gallery')
+nn_config(model)
 olden_nn(model, x_names=None, y_names=None, out_var=None, figsize=(10,7), bar_plot=True,
               title=None, plotstyle='_mpl-gallery', **kwargs
 plot_fit_history(history, figsize=(10,7))
+plot_keras_nn(model, description=False, figsize=(12,12), pos_col='blue', neg_col='red', weghts_edges=True, 
+             bias = True, lab_fontsize=10, features_names=None, target_names=None, max_sp=False, max_spn=3,
+             plot_fig=True, save_fig=False, file_name='nn_diagram.png', **kwargs)
 plot_MLP(model, left=.1, right=.9, bottom=.1, top=.9, figsize=(15,10), lab_fontsize=12, wt_fontsize=10,
              edges_color=['gray','k'], nodes_color='w', features_names=None, target_names=None, plot_fig=True,
              save_fig=False, file_name='nn_diagram.png', **kwargs)
@@ -38,8 +42,8 @@ from __future__ import division, absolute_import, print_function
 
 __all__ = ['ci_auc', 'confusion_matrix_statistic', 'Dixon_Test', 'ensemble_combine', 'garson_nn',
            'Grubbs_Test', 'importance_feature', 'inter_input_weight', 'Irvin_Test', 'lekprofile_nn',
-           'olden_nn','plot_fit_history', 'plot_MLP', 'progress', 'Rait_Test', 'regressor_combine',
-           'scale']
+           'nn_config', 'olden_nn','plot_fit_history', 'plot_keras_nn', 'plot_MLP', 'progress', 'Rait_Test',
+           'regressor_combine', 'scale']
 
 import pandas as pd
 import numpy as np
@@ -64,6 +68,7 @@ from sklearn.exceptions import ConvergenceWarning
 import matplotlib.pyplot as plt
 from clusterTools import classAgreement
 from functools import reduce
+from heapq import nlargest, nsmallest
 
 def ci_auc(y_true, y_pred, conf_level=0.95, n_bootstraps=1000, method='delong', sample_weight=None):
     """
@@ -953,6 +958,37 @@ def lekprofile_nn(model, data, xsel=None, steps=100, group_vals=np.arange(0,1.1,
         return out, grps
 
 
+def nn_config(model):
+    '''
+    Extract info for each layer in a keras model.
+    
+    Parameters
+    ----------
+    model : the keras neural network model.
+    
+    Returns
+    ----------
+    Configuration of the neural network model.
+    '''
+    lst_layers = []
+    if "Sequential" in str(model): #-> Sequential doesn't show the input layer
+        layer = model.layers[0]
+        lst_layers.append({"name":"input", "in":int(layer.input.shape[-1]), "neurons":0, 
+                           "out":int(layer.input.shape[-1]), "activation":None,
+                           "params":0, "bias":0})
+    for layer in model.layers:
+        try:
+            dic_layer = {"name":layer.name, "in":int(layer.input.shape[-1]), "neurons":layer.units, 
+                         "out":int(layer.output.shape[-1]), "activation":layer.get_config()["activation"],
+                         "params":layer.get_weights()[0], "bias":layer.get_weights()[1]}
+        except:
+            dic_layer = {"name":layer.name, "in":int(layer.input.shape[-1]), "neurons":0, 
+                         "out":int(layer.output.shape[-1]), "activation":None,
+                         "params":0, "bias":0}
+        lst_layers.append(dic_layer)
+    return lst_layers
+
+
 def olden_nn(model, x_names=None, y_names=None, out_var=None, figsize=(10,7), bar_plot=True, title=None, plotstyle='_mpl-gallery', **kwargs):
     """
     Relative importance of input variables in neural networks as the sum of the product of raw input-hidden,
@@ -1106,6 +1142,184 @@ def plot_fit_history(history, figsize=(10,7)):
     axs[1].minorticks_on()
     axs[1].set_xlim([-.3, len(history.history[history_list[0]])])
     plt.tight_layout()
+    plt.show()
+
+
+def plot_keras_nn(model, description=False, figsize=(12,12), pos_col='blue', neg_col='red', weghts_edges=True, bias = True, lab_fontsize=10, features_names=None, target_names=None, max_sp=False, max_spn=3, plot_fig=True, save_fig=False, file_name='nn_diagram.png', **kwargs):
+    """
+    Draw of the plot the structure of a keras neural network.
+    
+    Parameters
+    ----------
+    model : the keras neural network model.
+    description : [bool] if True, add the description to the plot about the characteristics
+                    of the layers. By default, False.
+    figsize : [int, int] a method used to change the dimension of plot window, width, height 
+                    in inches (default figsize=(12,12)).
+    pos_col : [lstr] The color of the edges for positive weights. By default, 'blue'.
+    neg_col : [lstr] The color of the edges for negative weights. By default, 'red'.
+    weghts_edges : [bool] if True, the thickness of the lines between the nodes will be dependent
+                    on the weight value. By default, True.
+    bias : [bool] if True, bias nodes and connections are plotted. By default, True.
+    lab_fontsize : [int] Size of text font for annotation of nodes and edges. By default, 10.
+    features_names : [list of str] Names of features seen during fit of model or a custom names 
+                    for annotation of Inputs. If None, then the inputs are annotated by the text
+                    of: X_1, X_2, ... X_n. By default, None.
+    target_names : [list of str] Names of targets seen during fit of model or a custom names 
+                    for annotation of Outputs. If None, then the outputs are annotated by the 
+                    text of: y_1, y_2, ... y_n. By default, None.
+    max_sp : [bool] if True, space between nodes in each layer is maximized By default, False.
+    max_spn : [int] the number of links between nodes with the highest and smallest values
+                    of the weights to draw on the plot. By default, 3.    
+    plot_fig : [bool] If true, displays the figure otherwise the figure is not.
+                    By default, plot_fig=True.
+    save_fig : [bool] If True, save the current figure in file. By default, save_fig=False.
+    file_name : [str] File name for saving the current figure. By default, 'nn_diagram.png'
+    **kwargs : other arguments for matplotlib.pyplot.savefig.
+
+    Returns
+    ----------
+    Plot of the neural network model.
+    """
+    ## get layers info
+    lst_layers = nn_config(model)
+    layer_sizes = [layer["out"] for layer in lst_layers]
+    n_layers = len(layer_sizes)
+    ## fig setup
+    fig = plt.figure(figsize=figsize)
+    ax = fig.gca()
+    ax.set(title=model.name)
+    ax.axis('off')
+    left, right, bottom, top = 0.1, 0.9, 0.1, 0.9
+    x_space = (right-left) / float(len(layer_sizes)-1)
+    y_space = (top-bottom) / float(max(layer_sizes))
+    p = 0.025    
+    ## nodes
+    for i,n in enumerate(layer_sizes):
+        top_on_layer = y_space*(n-1)/2.0 + (top+bottom)/2.0
+        layer = lst_layers[i]
+        color = "green" if i in [0, len(layer_sizes)-1] else "blue"
+        color = "red" if (layer['neurons'] == 0) and (i > 0) else color
+        ### add description
+        if (description is True):
+            d = i if i == 0 else i-0.5
+            if layer['activation'] is None:
+                plt.text(x=left+d*x_space, y=top, fontsize=lab_fontsize, color=color, s=layer["name"].upper())
+            else:
+                plt.text(x=left+d*x_space, y=top, fontsize=lab_fontsize, color=color, s=layer["name"].upper())
+                plt.text(x=left+d*x_space, y=top-p, fontsize=lab_fontsize, color=color, s=layer['activation']+" (")
+                plt.text(x=left+d*x_space, y=top-2*p, fontsize=lab_fontsize, color=color, s="Σ"+str(layer['in'])+"[X*w]+b")
+                out = " Y"  if i == len(layer_sizes)-1 else " out"
+                plt.text(x=left+d*x_space, y=top-3*p, fontsize=lab_fontsize, color=color, s=") = "+str(layer['neurons'])+out)
+        ### circles
+        for m in range(n):
+            color = "limegreen" if color == "green" else color
+            circle = plt.Circle(xy=(left+i*x_space, top_on_layer-m*y_space-4*p), radius=y_space/4.0, color=color, ec='k', zorder=4)
+            ax.add_artist(circle)
+            ### add text
+            if i == 0:
+                if features_names is not None:
+                    plt.text(x=left-4*p, y=top_on_layer-m*y_space-4*p, fontsize=lab_fontsize, s=features_names[m])
+                if features_names is None:
+                    plt.text(x=left-4*p, y=top_on_layer-m*y_space-4*p, fontsize=lab_fontsize, s=r'$X_{'+str(m+1)+'}$')
+                plt.text(x=left-1.2*p, y=top_on_layer-m*y_space-4*p, fontsize=lab_fontsize, s=r'$I_{'+str(m+1)+'}$')
+            elif i == len(layer_sizes)-1:
+                plt.text(x=right+0.7*p, y=top_on_layer-m*y_space-4*p, fontsize=lab_fontsize, s=r'$O_{'+str(m+1)+'}$')
+                if target_names is not None:
+                    plt.text(x=right+4*p, y=top_on_layer-m*y_space-4*p, fontsize=lab_fontsize, s=target_names[m])
+                if target_names is None:
+                    plt.text(x=right+4*p, y=top_on_layer-m*y_space-4*p, fontsize=lab_fontsize, s=r'$y_{'+str(m+1)+'}$')
+            else:
+                plt.text(x=left+i*x_space+p, y=top_on_layer-m*y_space+(y_space/8.+0.01*y_space)-4*p, fontsize=10, s=r'$H_{'+str(m+1)+'}$')
+    ## links
+    for i, (n_a, n_b) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+        layer = lst_layers[i+1]
+        color = "green" if i == len(layer_sizes)-2 else "blue"
+        color = "gray" if layer['neurons'] == 0 else color
+        layer_top_a = y_space*(n_a-1)/2. + (top+bottom)/2. -4*p
+        layer_top_b = y_space*(n_b-1)/2. + (top+bottom)/2. -4*p
+        if isinstance(lst_layers[i+1].get('params'), np.ndarray):
+            nl=nlargest(max_spn, [np.array(lst_layers[i+1].get('params')).flatten()][0])
+            ns=nsmallest(max_spn, [np.array(lst_layers[i+1].get('params')).flatten()][0])
+        for m in range(n_a):
+            for o in range(n_b):
+                if weghts_edges==True:
+                    if isinstance(lst_layers[i+1].get('params'), np.ndarray):
+                        if lst_layers[i+1].get('params')[m,o] < 0:
+                            color = neg_col
+                            if max_sp==True:
+                                linewidth=abs(lst_layers[i+1].get('params')[m,o])*2.5
+                                linewidth = [0 if lst_layers[i+1].get('params')[m,o] not in ns else linewidth][0]
+                            else:
+                                linewidth=abs(lst_layers[i+1].get('params')[m,o])*2.5    
+                        else:
+                            color = color
+                            
+                    if isinstance(lst_layers[i+1].get('params'), np.ndarray):
+                        if lst_layers[i+1].get('params')[m,o] >= 0:
+                            color = pos_col
+                            if max_sp==True:
+                                linewidth=abs(lst_layers[i+1].get('params')[m,o])*2.5
+                                linewidth = [0 if lst_layers[i+1].get('params')[m,o] not in nl else linewidth][0]
+                            else:
+                                linewidth=abs(lst_layers[i+1].get('params')[m,o])*2.5
+                        else:
+                            color = color
+                    if isinstance(lst_layers[i+1].get('params'), int):
+                        color=color
+                        linewidth=None       
+                else:
+                    color=color
+                    linewidth=None
+                line = plt.Line2D([i*x_space+left, (i+1)*x_space+left], 
+                                  [layer_top_a-m*y_space, layer_top_b-o*y_space], 
+                                  c=color, alpha=0.5, linewidth=linewidth)
+                if layer['activation'] is None:
+                    if o == m:
+                        ax.add_artist(line)
+                else:
+                    ax.add_artist(line)              
+    # bias-nodes
+    if bias == True:
+        nn=0
+        for n, layer_size in enumerate(layer_sizes):
+            layer = lst_layers[n]
+            if layer['neurons'] != 0:
+                nn+=1
+                x_bias = (n-0.5)*x_space + left
+                y_bias = top - 0.1
+                circle = plt.Circle(xy=(x_bias, y_bias), radius=y_space/5.0, color='lightblue', ec='k', zorder=4)
+                plt.text(x_bias-(y_space/8.+0.10*y_space+0.02), y_bias, r'$B_{'+str(nn)+'}$', fontsize=lab_fontsize)
+                ax.add_artist(circle)    
+        # links between bias and nodes
+        for n, (layer_size_a, layer_size_b) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+            layer = lst_layers[n+1]
+            if n < n_layers-1:
+                layer_top_a = y_space*(layer_size_a - 1)/2. + (top + bottom)/2.
+                layer_top_b = y_space*(layer_size_b - 1)/2. + (top + bottom)/2.-4*p
+            x_bias = (n+0.5)*x_space + left
+            y_bias = top - 0.1
+            for o in range(layer_size_b):
+                line = plt.Line2D([x_bias, (n+1)*x_space + left],
+                        [y_bias, layer_top_b-o*y_space], c='k')    
+                if layer['neurons'] != 0:
+                    ax.add_artist(line)          
+    # record the characteristics of model
+    n_iter_ = model.optimizer.iterations.numpy()
+    metric=list(model.get_metrics_result().keys())[1]
+    metric2=list(model.get_metrics_result().keys())[0]
+    acc=round(model.get_metrics_result().get(metric).numpy(),4)
+    loss=round(model.get_metrics_result().get(metric2).numpy(),4)
+    solver = model.optimizer.__class__.__name__
+    plt.text(left + (right-left)/10., 0.0001, \
+             'iterations: '+str(n_iter_)+'    {}: '.format(metric2)+ str(loss)+ \
+             '    {}: '.format(metric)+ str(acc)+ \
+             '    optimizer: {}'.format(solver), fontsize = lab_fontsize) 
+    # save and/or draw plot   
+    if save_fig==True:
+        fig.savefig(file_name, **kwargs)
+    if plot_fig == False:
+        plt.close(fig)        
     plt.show()
 
 
